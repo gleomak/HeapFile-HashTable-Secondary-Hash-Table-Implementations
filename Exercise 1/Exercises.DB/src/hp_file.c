@@ -9,13 +9,33 @@
 #define CALL_BF(call)       \
 {                           \
   BF_ErrorCode code = call; \
-  if (code != BF_OK) {         \
+  if (code != BF_OK) {      \
     BF_PrintError(code);    \
-    return HP_ERROR;        \
+    exit(code);              \
   }                         \
 }
 
 int HP_CreateFile(char *fileName){
+    int fd1;
+    BF_Block *block;
+    BF_Block_Init(&block);
+    CALL_BF(BF_CreateFile(fileName))
+
+    CALL_BF(BF_OpenFile(fileName, &fd1));
+    void* data;
+
+    CALL_BF(BF_AllocateBlock(fd1, block));  // Δημιουργία καινούριου block
+    data = BF_Block_GetData(block);
+    HP_info info;
+    info.fileDesc = fd1;
+
+    memcpy(data , &info , sizeof(HP_info));
+    BF_Block_SetDirty(block);
+    CALL_BF(BF_UnpinBlock(block));
+    BF_Block_Destroy(&block);
+    CALL_BF(BF_CloseFile(fd1));               //Κλείσιμο αρχείου και αποδέσμευση μνήμης
+    CALL_BF(BF_Close());
+    printf("telos");
     return 0;
 }
 
