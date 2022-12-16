@@ -26,29 +26,64 @@ int HP_CreateFile(char *fileName){
 
     CALL_BF(BF_AllocateBlock(fd1, block));  // Δημιουργία καινούριου block
     data = BF_Block_GetData(block);
-    HP_info info;
-    info.fileDesc = fd1;
-
-    memcpy(data , &info , sizeof(HP_info));
+    HP_info* info = malloc(sizeof(HP_info));
+    info->isHP = 1;
+    info->fileDesc = fd1;
+    info->lastBlock = 0;
+    memcpy(data , info , sizeof(HP_info));
     BF_Block_SetDirty(block);
     CALL_BF(BF_UnpinBlock(block));
-    BF_Block_Destroy(&block);
     CALL_BF(BF_CloseFile(fd1));               //Κλείσιμο αρχείου και αποδέσμευση μνήμης
     CALL_BF(BF_Close());
-    printf("telos");
+    BF_Block_Destroy(&block);
+//    free(info);
     return 0;
 }
 
 HP_info* HP_OpenFile(char *fileName){
-    return NULL ;
+    int fd1;
+    BF_Block *block;
+    BF_Block_Init(&block);
+    CALL_BF(BF_Init(LRU));
+    CALL_BF(BF_OpenFile(fileName, &fd1));
+    void* data;
+    CALL_BF(BF_GetBlock(fd1, 0, block));
+    data = BF_Block_GetData(block);
+    HP_info* hpInfo = data;
+    printf("is hp %d , fd is %d , number of last block is %d \n",hpInfo->isHP,hpInfo->fileDesc,hpInfo->lastBlock);
+    if(hpInfo->isHP != 1){
+        printf("This is not a HP file \n");
+        return NULL;
+    }
+    CALL_BF(BF_UnpinBlock(block));
+    BF_Block_Destroy(&block);
+    return hpInfo ;
 }
 
 
 int HP_CloseFile( HP_info* hp_info ){
+    int fd1 = hp_info->fileDesc;
+    printf("FD IS %d \n",fd1);
+    CALL_BF(BF_CloseFile(fd1));
+//    CALL_BF(BF_Close());
     return 0;
 }
 
 int HP_InsertEntry(HP_info* hp_info, Record record){
+    BF_Block *firstBlock;
+    BF_Block_Init(&firstBlock);
+    CALL_BF(BF_GetBlock(hp_info->fileDesc, 0, firstBlock));
+//    void* dataFirstBlock;
+//    dataFirstBlock = BF_Block_GetData(firstBlock);
+    if(hp_info->lastBlock == 0){
+        int newLastBlock = hp_info->lastBlock + 1;
+        hp_info->lastBlock = newLastBlock;
+        BF_Block *secondBlock;
+        BF_Block_Init(&secondBlock);
+        CALL_BF(BF_AllocateBlock(hp_info->fileDesc, secondBlock));  // Δημιουργία καινούριου block
+        void* data = BF_Block_GetData(secondBlock);
+        int offset = 512 - sizeof(HP_block_info);
+    }
     return 0;
 }
 
