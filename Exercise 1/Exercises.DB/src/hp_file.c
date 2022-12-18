@@ -86,12 +86,15 @@ int HP_InsertEntry(HP_info* hp_info, Record record){
     BF_Block *lastBlock;
     BF_Block_Init(&lastBlock);
     void* data;
-//    printf("HERE last block is %d\n",hp_info->lastBlock);
-    CALL_BF(BF_GetBlock(hp_info->fileDesc , hp_info->lastBlock , lastBlock));
-//    printf("AFTER HERE\n");
-    data = BF_Block_GetData(lastBlock);
-    HP_block_info* lastBlockInfo = data + hp_info->offset;
-
+    HP_block_info* lastBlockInfo;
+    if(hp_info->lastBlock == 0 ) {
+        data = hp_info->firstBlock;
+        lastBlockInfo = data + hp_info->offset;
+    }else {
+        CALL_BF(BF_GetBlock(hp_info->fileDesc, hp_info->lastBlock, lastBlock));
+        data = BF_Block_GetData(lastBlock);
+        lastBlockInfo = data + hp_info->offset;
+    }
     if(hp_info->lastBlock == 0 || lastBlockInfo->numOfRecords == lastBlockInfo->maxRecords){
         BF_Block *newBlock;
         BF_Block_Init(&newBlock);
@@ -116,12 +119,12 @@ int HP_InsertEntry(HP_info* hp_info, Record record){
         rec[lastBlockInfo->numOfRecords] = record;
         lastBlockInfo->numOfRecords += 1;
     }
-    BF_Block_SetDirty(lastBlock);
-    CALL_BF(BF_UnpinBlock(lastBlock));
-    BF_Block_Destroy(&lastBlock);
+    if(lastBlockInfo->numOfRecords != 0) {
+        BF_Block_SetDirty(lastBlock);
+        CALL_BF(BF_UnpinBlock(lastBlock));
+        BF_Block_Destroy(&lastBlock);
+    }
     printf("Record , last block is %d\n",hp_info->lastBlock);
-    BF_Block_SetDirty(hp_info->firstBlock);
-    CALL_BF(BF_UnpinBlock(hp_info->firstBlock));
     return 0;
 }
 
