@@ -9,6 +9,8 @@ typedef struct {
     int isHP;
     int fileDesc;
     int lastBlock;
+    int offset;
+    BF_Block* firstBlock;
 } HP_info;
 
 typedef struct{

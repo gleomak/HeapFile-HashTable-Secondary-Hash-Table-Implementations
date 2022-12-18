@@ -20,7 +20,6 @@ int HP_CreateFile(char *fileName){
     BF_Block *block;
     BF_Block_Init(&block);
     CALL_BF(BF_CreateFile(fileName))
-
     CALL_BF(BF_OpenFile(fileName, &fd1));
     void* data;
 
@@ -30,13 +29,22 @@ int HP_CreateFile(char *fileName){
     info->isHP = 1;
     info->fileDesc = fd1;
     info->lastBlock = 0;
+    info->offset = 512 - sizeof(HP_block_info)+ 1;
+    info->firstBlock = NULL;
     memcpy(data , info , sizeof(HP_info));
+
+    HP_block_info* info1 = malloc(sizeof(HP_block_info));
+    info1->numOfRecords = 0;
+    info1->maxRecords = (512 - sizeof(HP_block_info)) / sizeof(Record);
+    info1->nextBlock = NULL;
+    memcpy(data+info->offset , info1 , sizeof(HP_block_info));
+
     BF_Block_SetDirty(block);
     CALL_BF(BF_UnpinBlock(block));
     CALL_BF(BF_CloseFile(fd1));               //Κλείσιμο αρχείου και αποδέσμευση μνήμης
-    CALL_BF(BF_Close());
+//    CALL_BF(BF_Close());
     BF_Block_Destroy(&block);
-//    free(info);
+    free(info);
     return 0;
 }
 
@@ -44,54 +52,76 @@ HP_info* HP_OpenFile(char *fileName){
     int fd1;
     BF_Block *block;
     BF_Block_Init(&block);
-    CALL_BF(BF_Init(LRU));
+//    CALL_BF(BF_Init(LRU));
     CALL_BF(BF_OpenFile(fileName, &fd1));
     void* data;
     CALL_BF(BF_GetBlock(fd1, 0, block));
     data = BF_Block_GetData(block);
     HP_info* hpInfo = data;
-    printf("is hp %d , fd is %d , number of last block is %d \n",hpInfo->isHP,hpInfo->fileDesc,hpInfo->lastBlock);
+    hpInfo->firstBlock = block;
+    printf("is hp %d , fd is %d , offset is %d , number of last block is %d \n",hpInfo->isHP,hpInfo->fileDesc,hpInfo->offset,hpInfo->lastBlock);
+    HP_block_info* hpBlockInfo = data + hpInfo->offset;
+    printf("Max Records is %d\n" , hpBlockInfo->maxRecords);
     if(hpInfo->isHP != 1){
         printf("This is not a HP file \n");
         return NULL;
     }
-    CALL_BF(BF_UnpinBlock(block));
-    BF_Block_Destroy(&block);
     return hpInfo ;
 }
 
 
 int HP_CloseFile( HP_info* hp_info ){
     int fd1 = hp_info->fileDesc;
-    printf("FD IS %d \n",fd1);
+//    printf("FD IS %d , last block is %d\n",fd1 , hp_info->lastBlock);
+    BF_Block_SetDirty(hp_info->firstBlock);
+    CALL_BF(BF_UnpinBlock(hp_info->firstBlock));
+    BF_Block_Destroy(&hp_info->firstBlock);
+
     CALL_BF(BF_CloseFile(fd1));
-//    CALL_BF(BF_Close());
     return 0;
 }
 
 int HP_InsertEntry(HP_info* hp_info, Record record){
-    BF_Block *firstBlock;
-    BF_Block_Init(&firstBlock);
-    CALL_BF(BF_GetBlock(hp_info->fileDesc, 0, firstBlock));
-
-    int offset = 512 - sizeof(HP_block_info) + 1;
 
     BF_Block *lastBlock;
     BF_Block_Init(&lastBlock);
     void* data;
+//    printf("HERE last block is %d\n",hp_info->lastBlock);
     CALL_BF(BF_GetBlock(hp_info->fileDesc , hp_info->lastBlock , lastBlock));
+//    printf("AFTER HERE\n");
     data = BF_Block_GetData(lastBlock);
-    HP_block_info* blockInfo = data + offset;
+    HP_block_info* lastBlockInfo = data + hp_info->offset;
 
-    if(hp_info->lastBlock == 0 || blockInfo->numOfRecords == blockInfo->maxRecords){
-        int newLastBlock = hp_info->lastBlock + 1;
-        hp_info->lastBlock = newLastBlock;
-        BF_Block *secondBlock;
-        BF_Block_Init(&secondBlock);
-        CALL_BF(BF_AllocateBlock(hp_info->fileDesc, secondBlock));  // Δημιουργία καινούριου block
-        void* data2 = BF_Block_GetData(secondBlock);
+    if(hp_info->lastBlock == 0 || lastBlockInfo->numOfRecords == lastBlockInfo->maxRecords){
+        BF_Block *newBlock;
+        BF_Block_Init(&newBlock);
+        CALL_BF(BF_AllocateBlock(hp_info->fileDesc, newBlock));  // Δημιουργία καινούριου block
+        void* data2 = BF_Block_GetData(newBlock);
+        HP_block_info* hpBlockInfo = malloc(sizeof(HP_block_info));
+        hpBlockInfo->maxRecords = (512 - sizeof(HP_block_info)) / sizeof(Record);
+        hpBlockInfo->numOfRecords = 1;
+        hpBlockInfo->nextBlock = NULL;
+        memcpy(data2+hp_info->offset , hpBlockInfo , sizeof(HP_block_info));
+        free(hpBlockInfo);
 
+        lastBlockInfo->nextBlock = newBlock;
+        hp_info->lastBlock += 1;
+        Record* rec = data2;
+        rec[0] = record;
+        BF_Block_SetDirty(newBlock);
+        CALL_BF(BF_UnpinBlock(newBlock));
+        BF_Block_Destroy(&newBlock);
+    }else{
+        Record* rec = data;
+        rec[lastBlockInfo->numOfRecords] = record;
+        lastBlockInfo->numOfRecords += 1;
     }
+    BF_Block_SetDirty(lastBlock);
+    CALL_BF(BF_UnpinBlock(lastBlock));
+    BF_Block_Destroy(&lastBlock);
+    printf("Record , last block is %d\n",hp_info->lastBlock);
+    BF_Block_SetDirty(hp_info->firstBlock);
+    CALL_BF(BF_UnpinBlock(hp_info->firstBlock));
     return 0;
 }
 
