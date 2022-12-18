@@ -13,6 +13,7 @@ typedef struct {
 
 typedef struct{
     int numOfRecords;
+    int maxRecords;
     BF_Block* nextBlock;
 } HP_block_info;
 
