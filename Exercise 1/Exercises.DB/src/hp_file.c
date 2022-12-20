@@ -29,7 +29,7 @@ int HP_CreateFile(char *fileName){
     info->isHP = 1;
     info->fileDesc = fd1;
     info->lastBlock = 0;
-    info->offset = 512 - sizeof(HP_block_info)+ 1;
+    info->offset = 512 - sizeof(HP_block_info);
     info->firstBlock = NULL;
     memcpy(data , info , sizeof(HP_info));
     printf("Offset is : %d\n",info->offset);
@@ -42,7 +42,6 @@ int HP_CreateFile(char *fileName){
     BF_Block_SetDirty(block);
     CALL_BF(BF_UnpinBlock(block));
     CALL_BF(BF_CloseFile(fd1));               //Κλείσιμο αρχείου και αποδέσμευση μνήμης
-//    CALL_BF(BF_Close());
     BF_Block_Destroy(&block);
     free(info);
     free(info1);
@@ -72,19 +71,8 @@ HP_info* HP_OpenFile(char *fileName){
 
 int HP_CloseFile( HP_info* hp_info ){
     int fd1 = hp_info->fileDesc;
-//    printf("FD IS %d , last block is %d\n",fd1 , hp_info->lastBlock);
-//    int numOfBuckets;
-//    CALL_BF(BF_GetBlockCounter(fd1, &numOfBuckets));
-//    void* data;
-//    BF_Block* block;
-//    BF_Block_Init(&block);
-//    for(int i = 0 ; i < numOfBuckets ; i++){
-//        CALL_BF(BF_GetBlock(fd1, i, block));
-//        data = BF_Block_GetData(block);
-//        Record* rec = data;
-//
-//    }
     printf("size of block info : %lu\n",sizeof(HP_block_info));
+    printEntries(hp_info);
     BF_Block_SetDirty(hp_info->firstBlock);
     CALL_BF(BF_UnpinBlock(hp_info->firstBlock));
     BF_Block_Destroy(&hp_info->firstBlock);
@@ -139,7 +127,52 @@ int HP_InsertEntry(HP_info* hp_info, Record record){
     return 0;
 }
 
+void printEntries(HP_info* hp_info){
+    int fd1 = hp_info->fileDesc;
+    printf("FD IS %d , last block is %d\n",fd1 , hp_info->lastBlock);
+    int numOfBuckets;
+    CALL_BF(BF_GetBlockCounter(fd1, &numOfBuckets));
+    void* data;
+    BF_Block* block;
+    BF_Block_Init(&block);
+    for(int i = 1 ; i < numOfBuckets ; i++){
+        CALL_BF(BF_GetBlock(fd1, i, block));
+        data = BF_Block_GetData(block);
+        Record* rec = data;
+        HP_block_info* hpBlockInfo = data + hp_info->offset;
+        printf("Block %d has %d records : \n",i , hpBlockInfo->numOfRecords);
+        for(int j = 0 ; j < hpBlockInfo->numOfRecords ; j++){
+            printf("\tRecord %d is : " , j);
+            printRecord(rec[j]);
+        }
+        CALL_BF(BF_UnpinBlock(block));
+
+    }
+    BF_Block_Destroy(&block);
+}
+
 int HP_GetAllEntries(HP_info* hp_info, int value){
-   return 0;
+    int numOfBuckets;
+    CALL_BF(BF_GetBlockCounter(hp_info->fileDesc, &numOfBuckets));
+    void* data;
+    BF_Block* block;
+    BF_Block_Init(&block);
+    for(int i = 1 ; i < numOfBuckets ; i++) {
+        CALL_BF(BF_GetBlock(hp_info->fileDesc, i, block));
+        data = BF_Block_GetData(block);
+        Record* rec = data;
+        HP_block_info* hpBlockInfo = data + hp_info->offset;
+        for(int j = 0 ; j < hpBlockInfo->numOfRecords ; j++){
+            if(rec[j].id == value){
+                printf("\n");
+                printRecord(rec[j]);
+                BF_Block_Destroy(&block);
+                return i;
+            }
+        }
+        CALL_BF(BF_UnpinBlock(block));
+    }
+    BF_Block_Destroy(&block);
+    return -1;
 }
 
