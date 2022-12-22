@@ -6,11 +6,19 @@
 
 
 typedef struct {
-    // Να το συμπληρώσετε
+    int isHP;
+    int fileDesc;
+    int offset;
+    int numOfBuckets;
+    BF_Block* firstBlock;
+    int* bucketToLastBlock;
 } HT_info;
 
 typedef struct {
-    // Να το συμπληρώσετε
+    int blockNumber;
+    int numOfRecords;
+    int maxRecords;
+    int previousBlockNumber;
 } HT_block_info;
 
 /*Η συνάρτηση HT_CreateFile χρησιμοποιείται για τη δημιουργία
