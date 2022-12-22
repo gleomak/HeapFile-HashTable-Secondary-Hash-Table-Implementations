@@ -46,7 +46,7 @@ int HT_CreateFile(char *fileName,  int buckets){
         htBlockInfo->previousBlockNumber = -1;
         memcpy(data2 + htInfo->offset , htBlockInfo , sizeof(HT_block_info));
         htInfo->bucketToLastBlock[i] = i + 1;
-        printf("bucket has last block number : %d\n", htInfo->bucketToLastBlock[i]);
+//        printf("bucket has last block number : %d\n", htInfo->bucketToLastBlock[i]);
         free(htBlockInfo);
         BF_Block_SetDirty(htBlock2);
         CALL_OR_DIE(BF_UnpinBlock(htBlock2));
@@ -91,6 +91,7 @@ HT_info* HT_OpenFile(char *fileName){
 
 
 int HT_CloseFile( HT_info* HT_info ){
+    printEntries(HT_info);
     free(HT_info->bucketToLastBlock);
     BF_Block_SetDirty(HT_info->firstBlock);
     CALL_OR_DIE(BF_UnpinBlock(HT_info->firstBlock));
@@ -102,14 +103,10 @@ int HT_CloseFile( HT_info* HT_info ){
 int HT_InsertEntry(HT_info* ht_info, Record record){
     int hashNumber = record.id % ht_info->numOfBuckets;
     int blockNumber = ht_info->bucketToLastBlock[hashNumber];
-    printf("Hash number : %d has lastBlockNumber : %d \n",hashNumber,blockNumber);
+//    printf("Hash number : %d has lastBlockNumber : %d \n",hashNumber,blockNumber);
     BF_Block* block;
     BF_Block_Init(&block);
-    int debug;
-    CALL_OR_DIE(BF_GetBlockCounter(ht_info->fileDesc , &debug));
-    printf("UP hEre %d\n" , debug);
     CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc , blockNumber , block));
-    printf("Here\n");
     void* data = BF_Block_GetData(block);
     HT_block_info* blockInfo = data + ht_info->offset;
 
@@ -122,7 +119,7 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
         CALL_OR_DIE(BF_GetBlockCounter(ht_info->fileDesc , &blocks_num));
 
         HT_block_info* newBlockInfo = malloc(sizeof(HT_block_info));
-        newBlockInfo->blockNumber = blocks_num;
+        newBlockInfo->blockNumber = blocks_num - 1 ;
         newBlockInfo->numOfRecords = 1;
         newBlockInfo->maxRecords = (512 - sizeof(HT_block_info)) / sizeof(Record);
         newBlockInfo->previousBlockNumber = blockInfo->blockNumber;
@@ -132,9 +129,9 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
         Record* rec = newData;
         rec[0] = record;
 
-        printf("Before is hashnumber : %d , has lastBlock : %d\n" , hashNumber , ht_info->bucketToLastBlock[hashNumber]);
+//        printf("Before is hashnumber : %d , has lastBlock : %d\n" , hashNumber , ht_info->bucketToLastBlock[hashNumber]);
         ht_info->bucketToLastBlock[hashNumber] = blocks_num - 1;
-        printf("After is hashnumber : %d , has lastBlock : %d\n" , hashNumber , ht_info->bucketToLastBlock[hashNumber]);
+//        printf("After is hashnumber : %d , has lastBlock : %d\n" , hashNumber , ht_info->bucketToLastBlock[hashNumber]);
 
         BF_Block_SetDirty(newBlock);
         CALL_OR_DIE(BF_UnpinBlock(newBlock));
@@ -148,6 +145,34 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
     CALL_OR_DIE(BF_UnpinBlock(block));
     BF_Block_Destroy(&block);
     return 0;
+}
+
+void printEntries(HT_info* htInfo){
+    BF_Block* block;
+    BF_Block_Init(&block);
+    void* data;
+    for(int i = 0 ; i < htInfo->numOfBuckets ; i++){
+        printf("Bucket number %d with last bucket number %d has these blocks and records \n",i,htInfo->bucketToLastBlock[i]);
+        int lastBlock = htInfo->bucketToLastBlock[i];
+        CALL_OR_DIE(BF_GetBlock(htInfo->fileDesc , lastBlock , block));
+        data = BF_Block_GetData(block);
+        Record* rec = data;
+        HT_block_info* htBlockInfo = data + htInfo->offset;
+        while(1){
+            for(int j = 0 ; j < htBlockInfo->numOfRecords ; j++){
+                printf("\tRecord number %d of Block %d is ",j , htBlockInfo->blockNumber);
+                printRecord(rec[j]);
+            }
+            CALL_OR_DIE(BF_UnpinBlock(block));
+            if(htBlockInfo->previousBlockNumber == -1)
+                break;
+            CALL_OR_DIE(BF_GetBlock(htInfo->fileDesc , htBlockInfo->previousBlockNumber , block));
+            data = BF_Block_GetData(block);
+            htBlockInfo = data + htInfo->offset;
+            rec = data;
+        }
+    }
+    BF_Block_Destroy(&block);
 }
 
 int HT_GetAllEntries(HT_info* ht_info, void *value ){
