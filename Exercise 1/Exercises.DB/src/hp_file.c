@@ -166,6 +166,7 @@ int HP_GetAllEntries(HP_info* hp_info, int value){
             if(rec[j].id == value){
                 printf("\n");
                 printRecord(rec[j]);
+                CALL_BF(BF_UnpinBlock(block));
                 BF_Block_Destroy(&block);
                 return i;
             }

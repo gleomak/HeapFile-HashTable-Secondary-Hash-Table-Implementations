@@ -175,8 +175,39 @@ void printEntries(HT_info* htInfo){
     BF_Block_Destroy(&block);
 }
 
-int HT_GetAllEntries(HT_info* ht_info, void *value ){
-    return 0;
+int HT_GetAllEntries(HT_info* ht_info, int value ){
+    BF_Block* block;
+    BF_Block_Init(&block);
+    void* data;
+    int hashNumber = value % ht_info->numOfBuckets;
+    int lastBlock = ht_info->bucketToLastBlock[hashNumber];
+    CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc , lastBlock , block));
+    data = BF_Block_GetData(block);
+    Record* rec = data;
+    HT_block_info* htBlockInfo = data + ht_info->offset;
+    int blocksRead = 0;
+    while(1){
+        blocksRead++;
+        for(int i = 0 ; i < htBlockInfo->numOfRecords ; i++){
+            if(rec[i].id == value){
+                printf("Found value: %d,in block: %d, of hash %d\n",value,htBlockInfo->blockNumber , hashNumber);
+                printRecord(rec[i]);
+                CALL_OR_DIE(BF_UnpinBlock(block));
+                BF_Block_Destroy(&block);
+                return blocksRead;
+            }
+        }
+        CALL_OR_DIE(BF_UnpinBlock(block));
+        if(htBlockInfo->previousBlockNumber == -1){
+            break;
+        }
+        CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc , htBlockInfo->previousBlockNumber , block));
+        data = BF_Block_GetData(block);
+        htBlockInfo = data + ht_info->offset;
+        rec = data;
+    }
+    BF_Block_Destroy(&block);
+    return -1;
 }
 
 
