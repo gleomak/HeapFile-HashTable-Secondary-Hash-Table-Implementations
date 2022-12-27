@@ -103,7 +103,7 @@ int HT_CloseFile( HT_info* HT_info ){
 int HT_InsertEntry(HT_info* ht_info, Record record){
     int hashNumber = record.id % ht_info->numOfBuckets;
     int blockNumber = ht_info->bucketToLastBlock[hashNumber];
-//    printf("Hash number : %d has lastBlockNumber : %d \n",hashNumber,blockNumber);
+    int insertedInBlock;
     BF_Block* block;
     BF_Block_Init(&block);
     CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc , blockNumber , block));
@@ -128,6 +128,7 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
 
         Record* rec = newData;
         rec[0] = record;
+        insertedInBlock = blocks_num - 1;
 
 //        printf("Before is hashnumber : %d , has lastBlock : %d\n" , hashNumber , ht_info->bucketToLastBlock[hashNumber]);
         ht_info->bucketToLastBlock[hashNumber] = blocks_num - 1;
@@ -140,11 +141,12 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
         Record* rec = data;
         rec[blockInfo->numOfRecords] = record;
         blockInfo->numOfRecords += 1;
+        insertedInBlock  = blockInfo->blockNumber;
     }
     BF_Block_SetDirty(block);
     CALL_OR_DIE(BF_UnpinBlock(block));
     BF_Block_Destroy(&block);
-    return 0;
+    return insertedInBlock;
 }
 
 void printEntries(HT_info* htInfo){
