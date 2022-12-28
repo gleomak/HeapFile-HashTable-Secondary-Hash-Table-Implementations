@@ -57,10 +57,8 @@ HP_info* HP_OpenFile(char *fileName){
     CALL_BF(BF_GetBlock(fd1, 0, block));
     data = BF_Block_GetData(block);
     HP_info* hpInfo = data;
+    hpInfo->fileDesc = fd1;
     hpInfo->firstBlock = block;
-    printf("is hp %d , fd is %d , offset is %d , number of last block is %d \n",hpInfo->isHP,hpInfo->fileDesc,hpInfo->offset,hpInfo->lastBlock);
-    HP_block_info* hpBlockInfo = data + hpInfo->offset;
-    printf("Max Records is %d\n" , hpBlockInfo->maxRecords);
     if(hpInfo->isHP != 1){
         printf("This is not a HP file \n");
         return NULL;

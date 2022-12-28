@@ -3,15 +3,24 @@
 #include <record.h>
 #include <ht_table.h>
 
-
-
+typedef struct{
+    char strName[15];
+    int blockIndex;
+} shtTuple;
 
 typedef struct {
-    
+    int fileDesc;
+    int offset;
+    int numOfBuckets;
+    BF_Block* firstBlock;
+    int* bucketToLastBlock;
 } SHT_info;
 
 typedef struct {
-    // Να το συμπληρώσετε
+    int blockNumber;
+    int numOfRecords;
+    int maxRecords;
+    int previousBlockNumber;
 } SHT_block_info;
 
 /*Η συνάρτηση SHT_CreateSecondaryIndex χρησιμοποιείται για τη δημιουργία

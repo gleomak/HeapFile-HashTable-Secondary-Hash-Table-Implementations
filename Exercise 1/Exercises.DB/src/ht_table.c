@@ -56,7 +56,7 @@ int HT_CreateFile(char *fileName,  int buckets){
     free(htInfo);
     void* d = BF_Block_GetData(htBlock);
     HT_info* debug = d;
-    for(int i = 0 ; i < 10 ; i++){
+    for(int i = 0 ; i < buckets ; i++){
         printf("Last block is : %d\n" , debug->bucketToLastBlock[i]);
     }
 
@@ -81,6 +81,7 @@ HT_info* HT_OpenFile(char *fileName){
     CALL_OR_DIE(BF_GetBlock(fd1, 0, block));
     data = BF_Block_GetData(block);
     htInfo = data;
+    htInfo->fileDesc = fd1;
     htInfo->firstBlock = block;
     if(htInfo->isHP != 0){
         printf("This is not a HT file\n");
@@ -91,7 +92,7 @@ HT_info* HT_OpenFile(char *fileName){
 
 
 int HT_CloseFile( HT_info* HT_info ){
-    printEntries(HT_info);
+//    printEntries(HT_info);
     free(HT_info->bucketToLastBlock);
     BF_Block_SetDirty(HT_info->firstBlock);
     CALL_OR_DIE(BF_UnpinBlock(HT_info->firstBlock));
