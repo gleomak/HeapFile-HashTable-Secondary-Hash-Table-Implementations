@@ -106,7 +106,7 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     BF_Block_Init(&block);
     CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc , blockNumber , block));
     void* data = BF_Block_GetData(block);
-    HT_block_info* blockInfo = data + sht_info->offset;
+    SHT_block_info* blockInfo = data + sht_info->offset;
 
     if(blockInfo->numOfRecords == blockInfo->maxRecords){
         BF_Block* newBlock;
@@ -153,7 +153,19 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
 }
 
 int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name){
+    unsigned char *hashName = (unsigned char*) malloc(15);
+    memcpy(hashName , name , strlen(name) + 1);
+    int hashNumber = SHT_HashFunction(hashName , sht_info->numOfBuckets);
+    free(name);
+    int blockNumber = sht_info->bucketToLastBlock[hashNumber];
 
+    BF_Block* block;
+    BF_Block_Init(&block);
+    CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc , blockNumber , block));
+    void* data = BF_Block_GetData(block);
+    SHT_block_info* blockInfo = data + sht_info->offset;
+
+    
 }
 
 void printSHTEntries(SHT_info* shtInfo){
@@ -168,6 +180,7 @@ void printSHTEntries(SHT_info* shtInfo){
         shtTuple* shtTuple1 = data;
         SHT_block_info* shtBlockInfo = data + shtInfo->offset ;
         while(1){
+            printf(" Block number : %d from sht file has :\n",shtBlockInfo->blockNumber);
             for(int j = 0 ; j < shtBlockInfo->numOfRecords ; j++){
                 printf("\tRecord with name %s and blockID %d\n",shtTuple1[j].strName , shtTuple1[j].blockIndex);
             }
