@@ -96,7 +96,14 @@ int SHT_CloseSecondaryIndex( SHT_info* SHT_info ){
 }
 
 int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
+    unsigned char *name = (unsigned char*) malloc(15);
+    memcpy(name , record.name , strlen(record.name) + 1);
+    int hashNumber = SHT_HashFunction(name , sht_info->numOfBuckets);
+    printf("HashNumber is : %d, name is : %s\n",hashNumber , name);
 
+
+
+    return 1;
 }
 
 int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name){
@@ -104,13 +111,19 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
 }
 
 int SHT_HashFunction(unsigned char* string , int numOfBuckets){
-    unsigned long hash = 5381;
+//    unsigned long hash = 5381;
+//    int c;
+//
+//    while ((c = *string++))
+//        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+//    int hashNumber = (int)(hash % numOfBuckets);
+//    return hashNumber;
+    unsigned long hash = 0;
     int c;
 
     while ((c = *string++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-    int hashNumber = (int)(hash % numOfBuckets);
-    return hashNumber;
+        hash = c + (hash << 6) + (hash << 16) - hash;
+    return (int)(hash % numOfBuckets);
 }
 
 
