@@ -84,7 +84,7 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
 
 
 int SHT_CloseSecondaryIndex( SHT_info* SHT_info ){
-    printf("ID in SHT is : %d \n",SHT_info->fileDesc);
+    printSHTEntries(SHT_info);
     if(SHT_info == NULL)
         return -1;
     free(SHT_info->bucketToLastBlock);
@@ -100,14 +100,87 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     memcpy(name , record.name , strlen(record.name) + 1);
     int hashNumber = SHT_HashFunction(name , sht_info->numOfBuckets);
     printf("HashNumber is : %d, name is : %s\n",hashNumber , name);
+    free(name);
+    int blockNumber = sht_info->bucketToLastBlock[hashNumber];
+    BF_Block* block;
+    BF_Block_Init(&block);
+    CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc , blockNumber , block));
+    void* data = BF_Block_GetData(block);
+    HT_block_info* blockInfo = data + sht_info->offset;
 
+    if(blockInfo->numOfRecords == blockInfo->maxRecords){
+        BF_Block* newBlock;
+        BF_Block_Init(&newBlock);
+        CALL_OR_DIE(BF_AllocateBlock(sht_info->fileDesc , newBlock));
+        void* newData = BF_Block_GetData(newBlock);
+        int blocks_num;
+        CALL_OR_DIE(BF_GetBlockCounter(sht_info->fileDesc , &blocks_num));
 
+        SHT_block_info* newBlockInfo = malloc(sizeof(SHT_block_info));
+        newBlockInfo->blockNumber = blocks_num - 1;
+        newBlockInfo->numOfRecords = 1;
+        newBlockInfo->maxRecords = (512 - sizeof(SHT_block_info)) / sizeof(shtTuple);
+        newBlockInfo->previousBlockNumber = blockInfo->blockNumber ;
+        memcpy(newData + sht_info->offset , newBlockInfo , sizeof(SHT_block_info));
+        free(newBlockInfo);
 
-    return 1;
+        shtTuple tuple;
+        memcpy(tuple.strName , record.name , strlen(record.name) + 1);
+        tuple.blockIndex = block_id;
+
+        shtTuple* shtTuple1 = newData;
+        shtTuple1[0] = tuple;
+
+        sht_info->bucketToLastBlock[hashNumber] = blocks_num - 1;
+
+        BF_Block_SetDirty(newBlock);
+        CALL_OR_DIE(BF_UnpinBlock(newBlock));
+        BF_Block_Destroy(&newBlock);
+
+    }else{
+        shtTuple tuple;
+        memcpy(tuple.strName , record.name , strlen(record.name) + 1);
+        tuple.blockIndex = block_id;
+
+        shtTuple* shtTuple1 = data;
+        shtTuple1[blockInfo->numOfRecords] = tuple;
+        blockInfo->numOfRecords += 1;
+    }
+    BF_Block_SetDirty(block);
+    CALL_OR_DIE(BF_UnpinBlock(block));
+    BF_Block_Destroy(&block);
+    return 0;
 }
 
 int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name){
 
+}
+
+void printSHTEntries(SHT_info* shtInfo){
+    BF_Block* block;
+    BF_Block_Init(&block);
+    void* data;
+    for(int i = 0 ; i < shtInfo->numOfBuckets ; i++){
+        printf("Bucket number %d with last bucket number %d has these blocks and records\n",i,shtInfo->bucketToLastBlock[i]);
+        int lastBlock = shtInfo->bucketToLastBlock[i];
+        CALL_OR_DIE(BF_GetBlock(shtInfo->fileDesc , lastBlock , block));
+        data = BF_Block_GetData(block);
+        shtTuple* shtTuple1 = data;
+        SHT_block_info* shtBlockInfo = data + shtInfo->offset ;
+        while(1){
+            for(int j = 0 ; j < shtBlockInfo->numOfRecords ; j++){
+                printf("\tRecord with name %s and blockID %d\n",shtTuple1[j].strName , shtTuple1[j].blockIndex);
+            }
+            CALL_OR_DIE(BF_UnpinBlock(block));
+            if(shtBlockInfo->previousBlockNumber == -1)
+                break;
+            CALL_OR_DIE(BF_GetBlock(shtInfo->fileDesc , shtBlockInfo->previousBlockNumber , block));
+            data = BF_Block_GetData(block);
+            shtTuple1 = data;
+            shtBlockInfo = data + shtInfo->offset;
+        }
+    }
+    BF_Block_Destroy(&block);
 }
 
 int SHT_HashFunction(unsigned char* string , int numOfBuckets){
@@ -118,11 +191,16 @@ int SHT_HashFunction(unsigned char* string , int numOfBuckets){
 //        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 //    int hashNumber = (int)(hash % numOfBuckets);
 //    return hashNumber;
-    unsigned long hash = 0;
+//    unsigned long hash = 0;
+//    int c;
+//
+//    while ((c = *string++))
+//        hash = c + (hash << 6) + (hash << 16) - hash;
+//    return (int)(hash % numOfBuckets);
+    long hash = 0 ;
     int c;
-
     while ((c = *string++))
-        hash = c + (hash << 6) + (hash << 16) - hash;
+        hash += c;
     return (int)(hash % numOfBuckets);
 }
 

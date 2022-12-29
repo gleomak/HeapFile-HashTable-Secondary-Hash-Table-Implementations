@@ -92,7 +92,7 @@ HT_info* HT_OpenFile(char *fileName){
 
 
 int HT_CloseFile( HT_info* HT_info ){
-//    printEntries(HT_info);
+//    printHTEntries(HT_info);
     free(HT_info->bucketToLastBlock);
     BF_Block_SetDirty(HT_info->firstBlock);
     CALL_OR_DIE(BF_UnpinBlock(HT_info->firstBlock));
@@ -150,7 +150,7 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
     return insertedInBlock;
 }
 
-void printEntries(HT_info* htInfo){
+void printHTEntries(HT_info* htInfo){
     BF_Block* block;
     BF_Block_Init(&block);
     void* data;

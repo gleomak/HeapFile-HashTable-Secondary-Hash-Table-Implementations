@@ -76,4 +76,6 @@ int SHT_SecondaryGetAllEntries(
 
 int SHT_HashFunction(unsigned char* string , int numOfBuckets);
 
+void printSHTEntries(SHT_info* shtInfo);
+
 #endif // SHT_FILE_H
