@@ -84,7 +84,7 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
 
 
 int SHT_CloseSecondaryIndex( SHT_info* SHT_info ){
-    printSHTEntries(SHT_info);
+//    printSHTEntries(SHT_info);
     if(SHT_info == NULL)
         return -1;
     free(SHT_info->bucketToLastBlock);
@@ -153,19 +153,64 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
 }
 
 int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name){
+    int readBlocks = 0;
+
     unsigned char *hashName = (unsigned char*) malloc(15);
     memcpy(hashName , name , strlen(name) + 1);
     int hashNumber = SHT_HashFunction(hashName , sht_info->numOfBuckets);
-    free(name);
+    free(hashName);
     int blockNumber = sht_info->bucketToLastBlock[hashNumber];
 
     BF_Block* block;
     BF_Block_Init(&block);
     CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc , blockNumber , block));
     void* data = BF_Block_GetData(block);
-    SHT_block_info* blockInfo = data + sht_info->offset;
+    shtTuple* shtTuple1 = data;
+    SHT_block_info* shtBlockInfo = data + sht_info->offset;
 
-    
+    int numOfBlocks;
+    CALL_OR_DIE(BF_GetBlockCounter(ht_info->fileDesc , &numOfBlocks));
+    int* visitedArray = (int*) malloc(numOfBlocks * sizeof(int));
+    memset(visitedArray , 0 , numOfBlocks * sizeof(int));
+
+    while(1) {
+        readBlocks++;
+        for (int i = 0; i < shtBlockInfo->numOfRecords; i++) {
+            if (strcmp(name, shtTuple1[i].strName) == 0 && visitedArray[shtTuple1[i].blockIndex] == 0) {
+                printf("Block %d in SHT has records with the name : %s\n", shtTuple1[i].blockIndex, name);
+                printSpecificHTEntries(ht_info, shtTuple1[i].blockIndex, name);
+                visitedArray[shtTuple1[i].blockIndex] = 1;
+            }
+        }
+        CALL_OR_DIE(BF_UnpinBlock(block));
+        if(shtBlockInfo->previousBlockNumber == -1)
+            break;
+        CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc , shtBlockInfo->previousBlockNumber , block));
+        data = BF_Block_GetData(block);
+        shtBlockInfo = data + sht_info->offset ;
+        shtTuple1 = data;
+    }
+    BF_Block_Destroy(&block);
+    free(visitedArray);
+    return readBlocks;
+}
+
+void printSpecificHTEntries(HT_info* htInfo , int index , char* name){
+    BF_Block* block2;
+    BF_Block_Init(&block2);
+    CALL_OR_DIE(BF_GetBlock(htInfo->fileDesc , index , block2));
+    void* data2 = BF_Block_GetData(block2);
+    HT_block_info* htBlockInfo = data2 + htInfo->offset;
+    Record* rec = data2;
+
+    for(int i = 0 ; i < htBlockInfo->numOfRecords ; i++){
+        if(strcmp(name , rec[i].name) == 0) {
+            printf("\t");
+            printRecord(rec[i]);
+        }
+    }
+    CALL_OR_DIE(BF_UnpinBlock(block2));
+    BF_Block_Destroy(&block2);
 }
 
 void printSHTEntries(SHT_info* shtInfo){
