@@ -107,15 +107,20 @@ int HT_CloseFile(HT_info *HT_info) {
 }
 
 int HT_InsertEntry(HT_info *ht_info, Record record) {
+    /*Hashing the record.id , finding the last block of the bucket*/
     int hashNumber = record.id % ht_info->numOfBuckets;
     int blockNumber = ht_info->bucketToLastBlock[hashNumber];
-    int insertedInBlock;
+
+    int insertedInBlock; // Block that the record is going to be inserted
+
+    /*Pinning the last block and its contents*/
     BF_Block *block;
     BF_Block_Init(&block);
     CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc, blockNumber, block));
     void *data = BF_Block_GetData(block);
     HT_block_info *blockInfo = data + ht_info->offset;
 
+    /*If the last block is full create a new block*/
     if (blockInfo->numOfRecords == blockInfo->maxRecords) {
         BF_Block *newBlock;
         BF_Block_Init(&newBlock);
@@ -133,15 +138,16 @@ int HT_InsertEntry(HT_info *ht_info, Record record) {
         free(newBlockInfo);
 
         Record *rec = newData;
-        rec[0] = record;
+        rec[0] = record; // insertion of the record in the new Block
         insertedInBlock = blocks_num - 1;
 
+        /*Updating the last block of the desired bucket*/
         ht_info->bucketToLastBlock[hashNumber] = blocks_num - 1;
 
         BF_Block_SetDirty(newBlock);
         CALL_OR_DIE(BF_UnpinBlock(newBlock));
         BF_Block_Destroy(&newBlock);
-    } else {
+    } else { //if the block has space insert the record and update its contents
         Record *rec = data;
         rec[blockInfo->numOfRecords] = record;
         blockInfo->numOfRecords += 1;
@@ -187,6 +193,8 @@ int HT_GetAllEntries(HT_info *ht_info, int value) {
     BF_Block *block;
     BF_Block_Init(&block);
     void *data;
+
+    /*Hashing the value getting its data*/
     int hashNumber = value % ht_info->numOfBuckets;
     int lastBlock = ht_info->bucketToLastBlock[hashNumber];
     CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc, lastBlock, block));
@@ -194,10 +202,12 @@ int HT_GetAllEntries(HT_info *ht_info, int value) {
     Record *rec = data;
     HT_block_info *htBlockInfo = data + ht_info->offset;
     int blocksRead = 0;
+
+    /*While that breaks if we reached the first created block of the desired bucket*/
     while (1) {
         blocksRead++;
         for (int i = 0; i < htBlockInfo->numOfRecords; i++) {
-            if (rec[i].id == value) {
+            if (rec[i].id == value) { // we found the desired record
                 printf("Found value: %d,in block: %d, of hash %d\n", value, htBlockInfo->blockNumber, hashNumber);
                 printRecord(rec[i]);
                 CALL_OR_DIE(BF_UnpinBlock(block));
@@ -206,15 +216,19 @@ int HT_GetAllEntries(HT_info *ht_info, int value) {
             }
         }
         CALL_OR_DIE(BF_UnpinBlock(block));
-        if (htBlockInfo->previousBlockNumber == -1) {
+        if (htBlockInfo->previousBlockNumber == -1) { // We reached the first block of the bucket
             break;
         }
+
+        /*Getting and pinning the predecessor of this block*/
         CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc, htBlockInfo->previousBlockNumber, block));
         data = BF_Block_GetData(block);
         htBlockInfo = data + ht_info->offset;
         rec = data;
     }
     BF_Block_Destroy(&block);
+
+    /*If the code reaches here that means we did not find the ID we looked for*/
     return -1;
 }
 

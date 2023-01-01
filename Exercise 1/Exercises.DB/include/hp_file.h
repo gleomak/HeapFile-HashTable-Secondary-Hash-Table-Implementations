@@ -1,12 +1,13 @@
 #ifndef HP_FILE_H
 #define HP_FILE_H
+#define HP_ERROR -1;
 #include <record.h>
 
 
 
 /* Η δομή HP_info κρατάει μεταδεδομένα που σχετίζονται με το αρχείο σωρού*/
 typedef struct {
-    int isHP;
+    char* fileType;
     int fileDesc;
     int lastBlock;
     int offset;
@@ -16,7 +17,7 @@ typedef struct {
 typedef struct{
     int numOfRecords;
     int maxRecords;
-    BF_Block* nextBlock;
+    int nextBlockIndex;
 } HP_block_info;
 
 /*Η συνάρτηση HP_CreateFile χρησιμοποιείται για τη δημιουργία και
@@ -70,6 +71,6 @@ int HP_GetAllEntries(
     HP_info* header_info, /* επικεφαλίδα του αρχείου*/
     int id /* η τιμή id της εγγραφής στην οποία πραγματοποιείται η αναζήτηση*/);
 
-void printEntries(HP_info* hp_info);
+int printEntries(HP_info* hp_info);
 
 #endif // HP_FILE_H
