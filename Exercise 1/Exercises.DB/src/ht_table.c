@@ -11,7 +11,16 @@
     BF_ErrorCode code = call; \
     if (code != BF_OK) {      \
       BF_PrintError(code);    \
-      exit(code);             \
+      return -1;              \
+    }                         \
+  }
+
+#define CALL_OR_DIE2(call)    \
+  {                           \
+    BF_ErrorCode code = call; \
+    if (code != BF_OK) {      \
+      BF_PrintError(code);    \
+      return NULL;            \
     }                         \
   }
 
@@ -30,9 +39,8 @@ int HT_CreateFile(char *fileName, int buckets) {
     HT_info *htInfo = malloc(sizeof(HT_info));
     htInfo->fileDesc = fd1;
     htInfo->offset = 512 - sizeof(HT_block_info);
-    htInfo->isHP = 0;
+    htInfo->fileType = "HT";
     htInfo->numOfBuckets = buckets;
-    htInfo->bucketToLastBlock = (int *) malloc(buckets * sizeof(int));
     htInfo->firstBlock = NULL;
     void *data2;
     BF_Block *htBlock2;
@@ -76,16 +84,16 @@ HT_info *HT_OpenFile(char *fileName) {
     int fd1;
     BF_Block *block;
     BF_Block_Init(&block);
-    CALL_OR_DIE(BF_OpenFile(fileName, &fd1));
+    CALL_OR_DIE2(BF_OpenFile(fileName, &fd1));
 
     /*Get and pin the first block and update the fileDesc/first-block pointer values*/
     void *data;
-    CALL_OR_DIE(BF_GetBlock(fd1, 0, block));
+    CALL_OR_DIE2(BF_GetBlock(fd1, 0, block));
     data = BF_Block_GetData(block);
     htInfo = data;
     htInfo->fileDesc = fd1;
     htInfo->firstBlock = block;
-    if (htInfo->isHP != 0) {
+    if (strcmp(htInfo->fileType, "HT") != 0) {
         printf("This is not a HT file\n");
         return NULL;
     }
@@ -98,7 +106,6 @@ int HT_CloseFile(HT_info *HT_info) {
     if (HT_info == NULL)
         return -1;
     /*Freeing the hash-table , Setting dirty/unpinning the first block ,closing the file*/
-    free(HT_info->bucketToLastBlock);
     BF_Block_SetDirty(HT_info->firstBlock);
     CALL_OR_DIE(BF_UnpinBlock(HT_info->firstBlock));
     BF_Block_Destroy(&HT_info->firstBlock);
@@ -160,12 +167,12 @@ int HT_InsertEntry(HT_info *ht_info, Record record) {
 }
 
 /*Auxiliary function that prints all the entries for every bucket and all their blocks*/
-void printHTEntries(HT_info *htInfo) {
+int printHTEntries(HT_info *htInfo) {
     BF_Block *block;
     BF_Block_Init(&block);
     void *data;
     for (int i = 0; i < htInfo->numOfBuckets; i++) {
-        printf("Bucket number %d with last bucket number %d has these blocks and records \n", i,
+        printf("Bucket number %d with last block number %d has these blocks and records \n", i,
                htInfo->bucketToLastBlock[i]);
         int lastBlock = htInfo->bucketToLastBlock[i];
         CALL_OR_DIE(BF_GetBlock(htInfo->fileDesc, lastBlock, block));
@@ -173,6 +180,9 @@ void printHTEntries(HT_info *htInfo) {
         Record *rec = data;
         HT_block_info *htBlockInfo = data + htInfo->offset;
         while (1) {
+            printf(" Block number : %d from HT file with predecessor block %d has :\n", htBlockInfo->blockNumber,
+                   htBlockInfo->previousBlockNumber);
+
             for (int j = 0; j < htBlockInfo->numOfRecords; j++) {
                 printf("\tRecord number %d of Block %d is ", j, htBlockInfo->blockNumber);
                 printRecord(rec[j]);
@@ -187,6 +197,7 @@ void printHTEntries(HT_info *htInfo) {
         }
     }
     BF_Block_Destroy(&block);
+    return 0;
 }
 
 int HT_GetAllEntries(HT_info *ht_info, int value) {
@@ -230,6 +241,58 @@ int HT_GetAllEntries(HT_info *ht_info, int value) {
 
     /*If the code reaches here that means we did not find the ID we looked for*/
     return -1;
+}
+
+int HashStatisticsHT(char *filename) {
+    HT_info *htInfo = HT_OpenFile(filename);
+
+    BF_Block *block;
+    BF_Block_Init(&block);
+    void *data;
+
+    int allBlocks;
+    BF_GetBlockCounter(htInfo->fileDesc, &allBlocks);
+    printf("HT file with a total of %d buckets and %d blocks has:\n", htInfo->numOfBuckets, allBlocks);
+
+    int minRecords, maxRecords, averageRecords;
+    int overflowBlocks;
+    int totalBlocks = 0;
+    int bucketBlocks;
+    int bucketsWithOverFlowBlocks = 0;
+    for (int i = 0; i < htInfo->numOfBuckets; i++) {
+        int lastBlock = htInfo->bucketToLastBlock[i];
+        CALL_OR_DIE(BF_GetBlock(htInfo->fileDesc, lastBlock, block));
+        data = BF_Block_GetData(block);
+        HT_block_info *htBlockInfo = data + htInfo->offset;
+
+        minRecords = maxRecords = htBlockInfo->numOfRecords;
+        averageRecords = overflowBlocks = bucketBlocks = 0;
+        while (1) {
+            if (htBlockInfo->numOfRecords < minRecords)
+                minRecords = htBlockInfo->numOfRecords;
+            if (htBlockInfo->numOfRecords > maxRecords)
+                maxRecords = htBlockInfo->numOfRecords;
+            totalBlocks += 1;
+            bucketBlocks += 1;
+            averageRecords += htBlockInfo->numOfRecords;
+            CALL_OR_DIE(BF_UnpinBlock(block));
+            if (htBlockInfo->previousBlockNumber == -1)
+                break;
+            bucketsWithOverFlowBlocks += 1;
+            overflowBlocks += 1;
+            CALL_OR_DIE(BF_GetBlock(htInfo->fileDesc, htBlockInfo->previousBlockNumber, block));
+            data = BF_Block_GetData(block);
+            htBlockInfo = data + htInfo->offset;
+        }
+        printf("\tBucket number %d with a total of %d blocks( %d of them are overflow blocks) has min records: %d, max records: %d, average Records: %d\n",
+               i, bucketBlocks, overflowBlocks, minRecords,
+               maxRecords, averageRecords / bucketBlocks);
+    }
+    printf("Average number of blocks a bucket has is: %d\n\n", totalBlocks / htInfo->numOfBuckets);
+    printHTEntries(htInfo);
+    BF_Block_Destroy(&block);
+    HT_CloseFile(htInfo);
+    return 0;
 }
 
 

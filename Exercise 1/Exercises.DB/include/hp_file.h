@@ -73,4 +73,6 @@ int HP_GetAllEntries(
 
 int printEntries(HP_info* hp_info);
 
+int HashStatistics(char* filename);
+
 #endif // HP_FILE_H

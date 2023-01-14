@@ -12,7 +12,16 @@
     BF_ErrorCode code = call; \
     if (code != BF_OK) {      \
       BF_PrintError(code);    \
-      exit(code);             \
+      return -1;              \
+    }                         \
+  }
+
+#define CALL_OR_DIE2(call)     \
+  {                           \
+    BF_ErrorCode code = call; \
+    if (code != BF_OK) {      \
+      BF_PrintError(code);    \
+      return NULL;            \
     }                         \
   }
 
@@ -29,11 +38,11 @@ int SHT_CreateSecondaryIndex(char *sfileName, int buckets, char *fileName) {
 
     /* We initialize the shtInfo struct that will be saved in the first block of the sht file */
     SHT_info *shtInfo = malloc(sizeof(SHT_info));
+    shtInfo->fileType = "SHT";
     shtInfo->fileDesc = fd1;
     shtInfo->offset = 512 - sizeof(SHT_block_info);
     shtInfo->numOfBuckets = buckets;
     shtInfo->firstBlock = NULL;
-    shtInfo->bucketToLastBlock = malloc(buckets * sizeof(int));
     void *data2;
     BF_Block *shtBlock2;
     BF_Block_Init(&shtBlock2);
@@ -77,14 +86,18 @@ SHT_info *SHT_OpenSecondaryIndex(char *indexName) {
     int fd1;
     BF_Block *block;
     BF_Block_Init(&block);
-    CALL_OR_DIE(BF_OpenFile(indexName, &fd1));
+    CALL_OR_DIE2(BF_OpenFile(indexName, &fd1));
 
     /*Get and pin the first block and update the fileDesc/pointer-to-first-block values*/
-    CALL_OR_DIE(BF_GetBlock(fd1, 0, block));
+    CALL_OR_DIE2(BF_GetBlock(fd1, 0, block));
     void *data = BF_Block_GetData(block);
     shtInfo = data;
     shtInfo->fileDesc = fd1;
     shtInfo->firstBlock = block;
+    if(strcmp(shtInfo->fileType , "SHT") != 0) {
+        printf("This is not a SHT file !\n");
+        return NULL;
+    }
 
     return shtInfo;
 }
@@ -96,7 +109,6 @@ int SHT_CloseSecondaryIndex(SHT_info *SHT_info) {
         return -1;
 
     /*Freeing the hash table , Setting dirty/unpinning the first block , closing the file*/
-    free(SHT_info->bucketToLastBlock);
     BF_Block_SetDirty(SHT_info->firstBlock);
     CALL_OR_DIE(BF_UnpinBlock(SHT_info->firstBlock));
     BF_Block_Destroy(&SHT_info->firstBlock);
@@ -109,7 +121,6 @@ int SHT_SecondaryInsertEntry(SHT_info *sht_info, Record record, int block_id) {
     unsigned char *name = (unsigned char *) malloc(15);
     memcpy(name, record.name, strlen(record.name) + 1);
     int hashNumber = SHT_HashFunction(name, sht_info->numOfBuckets);
-//    printf("HashNumber is : %d, name is : %s\n", hashNumber, name);
     free(name);
     int blockNumber = sht_info->bucketToLastBlock[hashNumber];
 
@@ -214,7 +225,7 @@ int SHT_SecondaryGetAllEntries(HT_info *ht_info, SHT_info *sht_info, char *name)
 }
 
 /*Printing the Records with the specific name from the HT File block */
-void printSpecificHTEntries(HT_info *htInfo, int index, char *name) {
+int printSpecificHTEntries(HT_info *htInfo, int index, char *name) {
     BF_Block *block2;
     BF_Block_Init(&block2);
     CALL_OR_DIE(BF_GetBlock(htInfo->fileDesc, index, block2));
@@ -230,15 +241,16 @@ void printSpecificHTEntries(HT_info *htInfo, int index, char *name) {
     }
     CALL_OR_DIE(BF_UnpinBlock(block2));
     BF_Block_Destroy(&block2);
+    return 0;
 }
 
 /*Auxiliary function that prints all the entries for every bucket and all their blocks*/
-void printSHTEntries(SHT_info *shtInfo) {
+int printSHTEntries(SHT_info *shtInfo) {
     BF_Block *block;
     BF_Block_Init(&block);
     void *data;
     for (int i = 0; i < shtInfo->numOfBuckets; i++) {
-        printf("Bucket number %d with last bucket number %d has these blocks and records\n", i,
+        printf("Bucket number %d with last block number %d has these blocks and records\n", i,
                shtInfo->bucketToLastBlock[i]);
         int lastBlock = shtInfo->bucketToLastBlock[i];
         CALL_OR_DIE(BF_GetBlock(shtInfo->fileDesc, lastBlock, block));
@@ -246,7 +258,8 @@ void printSHTEntries(SHT_info *shtInfo) {
         shtTuple *shtTuple1 = data;
         SHT_block_info *shtBlockInfo = data + shtInfo->offset;
         while (1) {
-            printf(" Block number : %d from sht file has :\n", shtBlockInfo->blockNumber);
+            printf(" Block number : %d from sht file with predecessor block %d has :\n", shtBlockInfo->blockNumber,
+                   shtBlockInfo->previousBlockNumber);
             for (int j = 0; j < shtBlockInfo->numOfRecords; j++) {
                 printf("\tRecord with name %s and blockID %d\n", shtTuple1[j].strName, shtTuple1[j].blockIndex);
             }
@@ -260,6 +273,7 @@ void printSHTEntries(SHT_info *shtInfo) {
         }
     }
     BF_Block_Destroy(&block);
+    return 0;
 }
 
 /*Hash function , the commented out hash func might work better for bigger variety of names/more buckets*/
@@ -276,6 +290,58 @@ int SHT_HashFunction(unsigned char *string, int numOfBuckets) {
     while ((c = *string++))
         hash += c;
     return (int) (hash % numOfBuckets);
+}
+
+int HashStatisticsSHT(char *filename) {
+    SHT_info *shtInfo = SHT_OpenSecondaryIndex(filename);
+
+    BF_Block *block;
+    BF_Block_Init(&block);
+    void *data;
+
+    int allBlocks;
+    BF_GetBlockCounter(shtInfo->fileDesc, &allBlocks);
+    printf("SHT file with a total of %d buckets and %d blocks has:\n", shtInfo->numOfBuckets, allBlocks);
+
+    int minRecords, maxRecords, averageRecords;
+    int overflowBlocks;
+    int totalBlocks = 0;
+    int bucketBlocks;
+    int bucketsWithOverFlowBlocks = 0;
+    for (int i = 0; i < shtInfo->numOfBuckets; i++) {
+        int lastBlock = shtInfo->bucketToLastBlock[i];
+        CALL_OR_DIE(BF_GetBlock(shtInfo->fileDesc, lastBlock, block));
+        data = BF_Block_GetData(block);
+        SHT_block_info *shtBlockInfo = data + shtInfo->offset;
+
+        minRecords = maxRecords = shtBlockInfo->numOfRecords;
+        averageRecords = overflowBlocks = bucketBlocks = 0;
+        while (1) {
+            if (shtBlockInfo->numOfRecords < minRecords)
+                minRecords = shtBlockInfo->numOfRecords;
+            if (shtBlockInfo->numOfRecords > maxRecords)
+                maxRecords = shtBlockInfo->numOfRecords;
+            totalBlocks += 1;
+            bucketBlocks += 1;
+            averageRecords += shtBlockInfo->numOfRecords;
+            CALL_OR_DIE(BF_UnpinBlock(block));
+            if (shtBlockInfo->previousBlockNumber == -1)
+                break;
+            bucketsWithOverFlowBlocks += 1;
+            overflowBlocks += 1;
+            CALL_OR_DIE(BF_GetBlock(shtInfo->fileDesc, shtBlockInfo->previousBlockNumber, block));
+            data = BF_Block_GetData(block);
+            shtBlockInfo = data + shtInfo->offset;
+        }
+        printf("\tBucket number %d with a total of %d blocks( %d of them are overflow blocks) has min records: %d, max records: %d, average Records: %d\n",
+               i, bucketBlocks, overflowBlocks, minRecords,
+               maxRecords, averageRecords / bucketBlocks);
+    }
+    printf("Average number of blocks a bucket has is: %d\n\n", totalBlocks / shtInfo->numOfBuckets);
+    BF_Block_Destroy(&block);
+//    printSHTEntries(shtInfo);
+    SHT_CloseSecondaryIndex(shtInfo);
+    return 0;
 }
 
 

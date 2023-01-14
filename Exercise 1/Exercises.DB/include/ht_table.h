@@ -6,12 +6,12 @@
 
 
 typedef struct {
-    int isHP;
+    char* fileType;
     int fileDesc;
     int offset;
     int numOfBuckets;
     BF_Block* firstBlock;
-    int* bucketToLastBlock;
+    int bucketToLastBlock[20];
 } HT_info;
 
 typedef struct {
@@ -65,6 +65,8 @@ int HT_InsertEntry(HT_info* header_info, /*επικεφαλίδα του αρχ�
 int HT_GetAllEntries(HT_info* header_info, /*επικεφαλίδα του αρχείου*/
 	int value /*τιμή του πεδίου-κλειδιού προς αναζήτηση*/);
 
-void printHTEntries(HT_info* htInfo);
+int printHTEntries(HT_info* htInfo);
+
+int HashStatisticsHT(char* filename);
 
 #endif // HT_FILE_H

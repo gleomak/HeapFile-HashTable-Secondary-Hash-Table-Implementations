@@ -9,11 +9,12 @@ typedef struct{
 } shtTuple;
 
 typedef struct {
+    char* fileType;
     int fileDesc;
     int offset;
     int numOfBuckets;
     BF_Block* firstBlock;
-    int* bucketToLastBlock;
+    int bucketToLastBlock[10];
 } SHT_info;
 
 typedef struct {
@@ -76,8 +77,10 @@ int SHT_SecondaryGetAllEntries(
 
 int SHT_HashFunction(unsigned char* string , int numOfBuckets);
 
-void printSpecificHTEntries(HT_info* htInfo , int index , char* name);
+int printSpecificHTEntries(HT_info* htInfo , int index , char* name);
 
-void printSHTEntries(SHT_info* shtInfo);
+int printSHTEntries(SHT_info* shtInfo);
+
+int HashStatisticsSHT(char* filename);
 
 #endif // SHT_FILE_H
