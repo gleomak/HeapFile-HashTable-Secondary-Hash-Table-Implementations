@@ -1,6 +1,4 @@
-# <p style="text-align: center;">ΥΣΒΔ PROJECT 1-2</p>
-
-## Γιώργος Λεωνίδας Μακρυγιάννης 1115201900105
+# <p style="text-align: center;">Υλοποιηση Συστηματων Βασεων Δεδομενων PROJECT 1-2</p>
 
 ### Συναρτήσεις HP (σωρού (heap file)) :
 
